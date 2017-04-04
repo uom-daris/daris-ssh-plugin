@@ -1,15 +1,11 @@
 package daris.io;
 
-import java.io.EOFException;
-import java.io.FilterInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 
-public class SizedInputStream extends FilterInputStream {
+public class SizedInputStream extends CountingInputStream {
 
     private long _size = -1L;
-    private long _read = 0;
-    private long _mark = 0;
     private boolean _canClose;
 
     public SizedInputStream(InputStream in, long size, boolean canClose) {
@@ -23,15 +19,11 @@ public class SizedInputStream extends FilterInputStream {
     }
 
     @Override
-    public synchronized int read() throws IOException {
-        if (_read == _size) {
+    public int read() throws IOException {
+        if (bytesRead() >= _size) {
             return -1;
         }
-        int b = in.read();
-        if (b != -1) {
-            _read++;
-        }
-        return b;
+        return super.read();
     }
 
     @Override
@@ -40,87 +32,48 @@ public class SizedInputStream extends FilterInputStream {
     }
 
     @Override
-    public synchronized int read(byte[] b, int off, int len)
-            throws IOException {
-        if (_read == _size) {
+    public int read(byte[] b, int off, int len) throws IOException {
+        if (bytesRead() >= _size) {
             return -1;
         }
-        if (_size > 0 && _read + len > _size) {
-            len = (int) (_size - _read);
+        if (_size > 0 && bytesRead() + len > _size) {
+            len = (int) (_size - bytesRead());
         }
-        int n = in.read(b, off, len);
-        if (n == -1) {
-            if (_size < 0) {
-                return -1;
-            }
-            throw new EOFException(
-                    "End of stream found (EOF). Attempting to read " + len
-                            + " byte(s). Read " + _read
-                            + " byte(s) so far. Expected to read a total of "
-                            + _size + " byte(s)");
-        } else {
-            if (n < -1) {
-                throw new IOException(
-                        "Underlying stream indicated it has read less than -1 bytes: "
-                                + n);
-            }
-            _read += n;
-            return n;
-        }
+        return super.read(b, off, len);
     }
 
     @Override
-    public synchronized long skip(long n) throws IOException {
-        if (_read == _size) {
+    public long skip(long n) throws IOException {
+        if (bytesRead() >= _size) {
             return 0;
         }
-        if (_size > 0 && _read + n > _size) {
-            n = _size - _read;
+        if (_size > 0 && bytesRead() + n > _size) {
+            n = _size - bytesRead();
         }
-        long skipped = in.skip(n);
-        _read += skipped;
-        return skipped;
+        return super.skip(n);
     }
 
     @Override
-    public synchronized void mark(int readlimit) {
-        in.mark(readlimit);
-        _mark = _read;
-    }
-
-    @Override
-    public synchronized void reset() throws IOException {
-        /*
-         * A call to reset can still succeed if mark is not supported, but the
-         * resulting stream position is undefined, so it's not allowed here.
-         */
-        if (!markSupported()) {
-            throw new IOException("Mark not supported.");
-        }
-        in.reset();
-        _read = _mark;
-    }
-
-    @Override
-    public synchronized int available() throws IOException {
+    public int available() throws IOException {
         if (bytesRemaining() == 0) {
             return 0;
         }
-        return in.available();
+        int a = in.available();
+        if (_size >= 0 && a > _size) {
+            return (int) _size;
+        } else {
+            return a;
+        }
     }
 
-    public synchronized long bytesRead() {
-        return _read;
-    }
-
-    public synchronized long bytesRemaining() {
+    public long bytesRemaining() {
         if (_size < 0) {
             return -1;
         }
         if (_size == 0) {
             return 0;
         }
-        return _size - _read;
+        return _size - bytesRead();
     }
 
     @Override
