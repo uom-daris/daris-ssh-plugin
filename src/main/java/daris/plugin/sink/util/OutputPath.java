@@ -67,7 +67,7 @@ public class OutputPath {
         }
         if (unarchive) {
             if (ext != null && (outputPath.endsWith("." + ext) || outputPath.endsWith("." + ext.toUpperCase()))) {
-                outputPath = outputPath.substring(outputPath.length() - ext.length() - 1);
+                outputPath = outputPath.substring(0, outputPath.length() - ext.length() - 1);
             }
         } else {
             if (ext != null && !(outputPath.endsWith("." + ext) || outputPath.endsWith("." + ext.toUpperCase()))) {
