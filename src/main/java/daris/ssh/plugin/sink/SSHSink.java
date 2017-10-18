@@ -1,7 +1,9 @@
 package daris.ssh.plugin.sink;
 
+import java.io.Closeable;
 import java.io.InputStream;
 import java.util.Map;
+import java.util.regex.Pattern;
 
 import arc.archive.ArchiveInput;
 import arc.archive.ArchiveRegistry;
@@ -14,19 +16,59 @@ import arc.streams.LongInputStream;
 import arc.xml.XmlDoc.Element;
 import daris.plugin.sink.AbstractDataSink;
 import daris.plugin.sink.util.OutputPath;
-import daris.ssh.client.SSHClient;
-import daris.ssh.client.SSHClientBuilder;
-import daris.util.PathUtils;
+import io.github.xtman.ssh.util.PathUtils;
 
 public abstract class SSHSink extends AbstractDataSink {
 
+    static interface Client extends Closeable {
+
+        /**
+         * The remote base directory.
+         * 
+         * @return
+         */
+        String baseDirectory();
+
+        /**
+         * Put the input (file) stream to the remote destination.
+         * 
+         * @param in
+         *            The input stream.
+         * @param length
+         *            Length of the input.
+         * @param dstPath
+         *            The destination path relative to the base directory.
+         * @throws Throwable
+         */
+        void put(InputStream in, long length, String dstPath) throws Throwable;
+
+        /**
+         * Make directories recursively.
+         * 
+         * @param dstDirPath
+         *            The destination directory path relative to the base
+         *            directory.
+         * @throws Throwable
+         */
+        void mkdirs(String dstDirPath) throws Throwable;
+
+    }
+
+    public static final int DEFAULT_FILE_MODE = 0640;
+
+    public static final int DEFAULT_DIR_MODE = 0755;
+
     public static final String PARAM_HOST = "host";
     public static final String PARAM_PORT = "port";
+    public static final String PARAM_HOST_KEY = "host-key";
     public static final String PARAM_USERNAME = "username";
     public static final String PARAM_PASSWORD = "password";
     public static final String PARAM_PRIVATE_KEY = "private-key";
+    public static final String PARAM_PASSPHRASE = "passphrase";
     public static final String PARAM_DIRECTORY = "directory";
     public static final String PARAM_UNARCHIVE = "unarchive";
+    public static final String PARAM_DIR_MODE = "dir-mode";
+    public static final String PARAM_FILE_MODE = "file-mode";
 
     protected SSHSink(String typeName) throws Throwable {
         super(typeName);
@@ -36,12 +78,19 @@ public abstract class SSHSink extends AbstractDataSink {
          */
         addParameterDefinition(PARAM_HOST, StringType.DEFAULT, "SSH server host.");
         addParameterDefinition(PARAM_PORT, new IntegerType(1, 65535), "SSH server port.");
+        addParameterDefinition(PARAM_HOST_KEY, StringType.DEFAULT,
+                "SSH server host public key. If specified, host key will be validated.");
         addParameterDefinition(PARAM_USERNAME, StringType.DEFAULT, "SSH username.");
         addParameterDefinition(PARAM_PASSWORD, PasswordType.DEFAULT, "User's password.");
         addParameterDefinition(PARAM_PRIVATE_KEY, PasswordType.DEFAULT, "User's private key.");
+        addParameterDefinition(PARAM_PASSPHRASE, PasswordType.DEFAULT, "Passphrase for user's private key.");
         addParameterDefinition(PARAM_DIRECTORY, StringType.DEFAULT,
                 "The default/base directory on the remote SSH server. If not specified, defaults to user's home directory.");
         addParameterDefinition(PARAM_UNARCHIVE, BooleanType.DEFAULT, "Extract archive contents. Defaults to false.");
+        addParameterDefinition(PARAM_DIR_MODE, new StringType(Pattern.compile("^[0-7]{4}$")),
+                "Remote directory mode (permissions). Defaults to " + String.format("%04o", DEFAULT_DIR_MODE));
+        addParameterDefinition(PARAM_FILE_MODE, new StringType(Pattern.compile("^[0-7]{4}$")),
+                "Remote file mode (permissions). Defaults to " + String.format("%04o", DEFAULT_FILE_MODE));
     }
 
     public String[] acceptedTypes() throws Throwable {
@@ -50,7 +99,7 @@ public abstract class SSHSink extends AbstractDataSink {
 
     public Object beginMultiple(Map<String, String> params) throws Throwable {
         validateParams(params);
-        return getClient(params);
+        return createClient(params);
     }
 
     public int compressionLevelRequired() {
@@ -66,16 +115,8 @@ public abstract class SSHSink extends AbstractDataSink {
             // in beginMultiple() method.
             validateParams(params);
         }
-        String directory = params.get(PARAM_DIRECTORY);
         String assetSpecificOutputPath = multiTransferContext != null ? null : getAssetSpecificOutput(params);
-        boolean unarchive = false;
-        if (params.containsKey(PARAM_UNARCHIVE)) {
-            try {
-                unarchive = Boolean.parseBoolean(params.get(PARAM_UNARCHIVE));
-            } catch (Throwable e) {
-                unarchive = false;
-            }
-        }
+        boolean unarchive = Boolean.parseBoolean(params.getOrDefault(PARAM_UNARCHIVE, "false"));
         String mimeType = streamMimeType;
         if (mimeType == null && assetMeta != null) {
             mimeType = assetMeta.value("content/type");
@@ -86,28 +127,31 @@ public abstract class SSHSink extends AbstractDataSink {
         /*
          * 
          */
-        SSHClient client = null;
+        Client client = null;
         try {
-            client = getClient(multiTransferContext, params);
+            client = getOrCreateClient(multiTransferContext, params);
             if (unarchive) {
-                String dirPath = OutputPath.getOutputPath(directory, assetSpecificOutputPath, path, assetMeta, true);
+                String dirPath = OutputPath.getOutputPath(null, assetSpecificOutputPath, path, assetMeta, true);
                 ArchiveInput ai = ArchiveRegistry.createInput(in, new NamedMimeType(mimeType));
                 ArchiveInput.Entry entry;
                 try {
                     while ((entry = ai.next()) != null) {
-                        if (entry.isDirectory()) {
-                            client.mkdirs(PathUtils.join(dirPath, entry.name()));
-                        } else {
-                            put(client, entry.stream(), entry.size(), PathUtils.join(dirPath, entry.name()));
+                        try {
+                            if (entry.isDirectory()) {
+                                client.mkdirs(PathUtils.join(dirPath, entry.name()));
+                            } else {
+                                client.put(entry.stream(), entry.size(), PathUtils.join(dirPath, entry.name()));
+                            }
+                        } finally {
+                            ai.closeEntry();
                         }
                     }
                 } finally {
                     ai.close();
                 }
             } else {
-                String remoteFilePath = OutputPath.getOutputPath(directory, assetSpecificOutputPath, path, assetMeta,
-                        false);
-                put(client, in, length, remoteFilePath);
+                String dstPath = OutputPath.getOutputPath(null, assetSpecificOutputPath, path, assetMeta, false);
+                client.put(in, length, dstPath);
             }
         } finally {
             if (multiTransferContext == null && client != null) {
@@ -116,11 +160,12 @@ public abstract class SSHSink extends AbstractDataSink {
         }
     }
 
-    protected abstract void put(SSHClient client, InputStream in, long length, String remoteFilePath) throws Throwable;
+    // protected abstract void put(SSHClient client, InputStream in, long
+    // length, String remoteFilePath) throws Throwable;
 
     public void endMultiple(Object multiTransferContext) throws Throwable {
         if (multiTransferContext != null) {
-            SSHClient client = (SSHClient) multiTransferContext;
+            Client client = (Client) multiTransferContext;
             client.close();
         }
     }
@@ -141,21 +186,30 @@ public abstract class SSHSink extends AbstractDataSink {
         }
     }
 
-    protected SSHClient getClient(Map<String, String> params) throws Throwable {
-        SSHClientBuilder builder = SSHClientBuilder.getInstance();
-        builder.setHost(params.get(PARAM_HOST));
-        builder.setPort(Integer.parseInt(params.getOrDefault(PARAM_PORT, "22")));
-        builder.setUsername(params.get(PARAM_USERNAME));
-        builder.setPassword(params.get(PARAM_PASSWORD));
-        builder.setPrivateKey(params.get(PARAM_PRIVATE_KEY), null);
-        return builder.build();
+    private Client createClient(Map<String, String> params) throws Throwable {
+        String host = params.get(PARAM_HOST);
+        int port = Integer.parseInt(params.getOrDefault(PARAM_PORT, "22"));
+        String hostKey = params.get(PARAM_HOST_KEY);
+        String username = params.get(PARAM_USERNAME);
+        String password = params.get(PARAM_PASSWORD);
+        String privateKey = params.get(PARAM_PRIVATE_KEY);
+        String passphrase = params.get(PARAM_PASSPHRASE);
+        String directory = params.get(PARAM_DIRECTORY);
+        int dirMode = Integer.parseInt(params.getOrDefault(PARAM_DIR_MODE, String.format("%04o", DEFAULT_DIR_MODE)), 8);
+        int fileMode = Integer.parseInt(params.getOrDefault(PARAM_FILE_MODE, String.format("%04o", DEFAULT_FILE_MODE)),
+                8);
+        return createClient(host, port, hostKey, username, password, privateKey, passphrase, directory, dirMode,
+                fileMode);
     }
 
-    private SSHClient getClient(Object multiTransferContext, Map<String, String> params) throws Throwable {
+    protected abstract Client createClient(String host, int port, String hostKey, String username, String password,
+            String privateKey, String passphrase, String directory, int dirMode, int fileMode) throws Throwable;
+
+    private Client getOrCreateClient(Object multiTransferContext, Map<String, String> params) throws Throwable {
         if (multiTransferContext != null) {
-            return (SSHClient) multiTransferContext;
+            return (Client) multiTransferContext;
         } else {
-            return getClient(params);
+            return createClient(params);
         }
     }
 

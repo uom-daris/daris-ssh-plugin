@@ -1,4 +1,4 @@
-package daris.io;
+package io.github.xtman.io.util;
 
 import java.io.FilterInputStream;
 import java.io.IOException;

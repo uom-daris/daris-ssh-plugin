@@ -7,8 +7,7 @@ import arc.mf.plugin.dtype.IntegerType;
 import arc.mf.plugin.dtype.StringType;
 import arc.xml.XmlDoc.Element;
 import arc.xml.XmlWriter;
-import daris.ssh.client.KeyTools;
-import daris.ssh.client.ganymed.GanymedClient;
+import io.github.xtman.ssh.client.SshKeyTools;
 
 public class SvcHostKeyScan extends PluginService {
 
@@ -44,8 +43,8 @@ public class SvcHostKeyScan extends PluginService {
     public void execute(Element args, Inputs arg1, Outputs arg2, XmlWriter w) throws Throwable {
         String host = args.value("host");
         int port = args.intValue("port", 22);
-        byte[] pubkey = GanymedClient.getServerHostKey(host, port);
-        String type = KeyTools.getPublicKeyType(pubkey);
+        byte[] pubkey = SshKeyTools.getServerHostKeyBytes(host, port, "ssh-rsa");
+        String type = SshKeyTools.getPublicKeyType(pubkey);
         w.add("public-key", new String[] { "type", type }, Base64.getEncoder().encodeToString(pubkey));
     }
 
