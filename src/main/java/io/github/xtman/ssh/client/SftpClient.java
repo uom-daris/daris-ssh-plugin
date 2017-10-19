@@ -19,7 +19,7 @@ import ch.ethz.ssh2.SFTPv3Client;
 import ch.ethz.ssh2.SFTPv3FileAttributes;
 import ch.ethz.ssh2.SFTPv3FileHandle;
 import io.github.xtman.io.util.StreamUtils;
-import io.github.xtman.ssh.util.PathUtils;
+import io.github.xtman.util.PathUtils;
 
 public class SftpClient implements Closeable {
 
@@ -234,10 +234,6 @@ public class SftpClient implements Closeable {
      * @throws Throwable
      */
     public void put(InputStream in, long length, Integer mtime, String relDstPath) throws Throwable {
-        String relDstDirPath = PathUtils.getParent(relDstPath);
-        if (relDstDirPath != null) {
-            mkdirs(relDstDirPath);
-        }
         SFTPv3FileAttributes fileAttrs = new SFTPv3FileAttributes();
         fileAttrs.mtime = mtime;
         fileAttrs.permissions = 0100000 + _fileMode;
@@ -339,7 +335,7 @@ public class SftpClient implements Closeable {
     static void put(SFTPv3Client client, InputStream in, long length, String absDstPath, SFTPv3FileAttributes attrs,
             int dirMode) throws Throwable {
         String dirPath = PathUtils.getParent(absDstPath);
-        if (dirPath != null) {
+        if (dirPath != null && !directoryExists(client, dirPath)) {
             mkdirs(client, dirPath, dirMode);
         }
         SFTPv3FileHandle f = client.createFile(absDstPath);

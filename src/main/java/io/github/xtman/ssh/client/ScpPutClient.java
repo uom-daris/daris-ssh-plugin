@@ -16,7 +16,7 @@ import java.nio.file.attribute.BasicFileAttributes;
 
 import ch.ethz.ssh2.Session;
 import io.github.xtman.io.util.StreamUtils;
-import io.github.xtman.ssh.util.PathUtils;
+import io.github.xtman.util.PathUtils;
 
 public class ScpPutClient implements Closeable {
 
@@ -149,8 +149,9 @@ public class ScpPutClient implements Closeable {
         /*
          * go to base dir
          */
-
-        // System.out.println("Sending command: " + cmd);
+        if (_verbose) {
+            System.out.println("Sending command: " + cmd);
+        }
         _session.execCommand(cmd);
         checkResponse(_cin);
 
@@ -211,7 +212,9 @@ public class ScpPutClient implements Closeable {
             long mtime = lastModified / 1000;
             String cmd = String.format("T%d 0 %d 0\n", mtime, mtime);
 
-            // System.out.println("Sending command: " + cmd);
+            if (_verbose) {
+                System.out.println("Sending command: " + cmd);
+            }
             _cout.write(cmd.getBytes(encoding()));
             _cout.flush();
             checkResponse(_cin);
@@ -222,7 +225,9 @@ public class ScpPutClient implements Closeable {
         sb.append(String.format("C%04o %d %s\n", fileMode(), length, fileName));
         String cmd = sb.toString();
 
-        // System.out.println("Sending command: " + cmd);
+        if (_verbose) {
+            System.out.println("Sending command: " + cmd);
+        }
         _cout.write(cmd.getBytes(encoding()));
         _cout.flush();
         checkResponse(_cin);
@@ -317,7 +322,9 @@ public class ScpPutClient implements Closeable {
      */
     private void pushDir(String dirName) throws IOException {
         String cmd = String.format("D%04o 0 %s\n", directoryMode(), dirName);
-        // System.out.println("Sending command: " + cmd);
+        if (_verbose) {
+            System.out.println("Sending command: " + cmd);
+        }
         _cout.write(cmd.getBytes(encoding()));
         _cout.flush();
         checkResponse(_cin);
@@ -330,7 +337,9 @@ public class ScpPutClient implements Closeable {
      */
     private void popDir() throws IOException {
         String cmd = "E\n";
-        // System.out.println("Sending command: " + cmd);
+        if (_verbose) {
+            System.out.println("Sending command: " + cmd);
+        }
         _cout.write(cmd.getBytes(encoding()));
         _cout.flush();
         checkResponse(_cin);

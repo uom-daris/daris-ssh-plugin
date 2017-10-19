@@ -13,17 +13,22 @@ public abstract class AbstractDataSink implements DataSinkImpl {
     private Map<String, ParameterDefinition> _paramDefns;
     private String _typeName;
 
-    public AbstractDataSink(String typeName) {
+    public AbstractDataSink(String typeName) throws Throwable {
         if (typeName.startsWith(SinkConstants.SINK_TYPE_NAME_PREFIX)) {
             _typeName = typeName;
         } else {
             _typeName = SinkConstants.SINK_TYPE_NAME_PREFIX + typeName;
         }
         _paramDefns = new LinkedHashMap<String, ParameterDefinition>();
+        addParameterDefinitions(_paramDefns);
+        _paramDefns.put(SinkConstants.SINK_ARG_ASSET_SPECIFIC_OUTPUT,
+                new ParameterDefinition(StringType.DEFAULT, SinkConstants.SINK_ARG_ASSET_SPECIFIC_OUTPUT_DESCRIPTION));
     }
 
-    protected void addParameterDefinition(String name, DataType type, String description, boolean assetSpecific)
-            throws Throwable {
+    protected abstract void addParameterDefinitions(Map<String, ParameterDefinition> paramDefns) throws Throwable;
+
+    protected void addParameterDefinition(Map<String, ParameterDefinition> paramDefns, String name, DataType type,
+            String description, boolean assetSpecific) throws Throwable {
         String pn = name.toLowerCase();
 
         if (assetSpecific) {
@@ -31,14 +36,15 @@ public abstract class AbstractDataSink implements DataSinkImpl {
                 pn = SinkConstants.SINK_ARG_ASSET_SPECIFIC_PREFIX + pn;
             }
         }
-        if (_paramDefns.containsKey(pn)) {
+        if (paramDefns.containsKey(pn)) {
             throw new IllegalArgumentException("Argument: " + pn + " for sink type: " + type() + " already exists.");
         }
-        _paramDefns.put(name, new ParameterDefinition(type, description));
+        paramDefns.put(name, new ParameterDefinition(type, description));
     }
 
-    protected void addParameterDefinition(String name, DataType type, String description) throws Throwable {
-        addParameterDefinition(name, type, description, false);
+    protected void addParameterDefinition(Map<String, ParameterDefinition> paramDefns, String name, DataType type,
+            String description) throws Throwable {
+        addParameterDefinition(paramDefns, name, type, description, false);
     }
 
     @Override
@@ -48,10 +54,6 @@ public abstract class AbstractDataSink implements DataSinkImpl {
 
     @Override
     public final Map<String, ParameterDefinition> parameterDefinitions() throws Throwable {
-        if (!_paramDefns.containsKey(SinkConstants.SINK_ARG_ASSET_SPECIFIC_OUTPUT)) {
-            addParameterDefinition(SinkConstants.SINK_ARG_ASSET_SPECIFIC_OUTPUT, StringType.DEFAULT,
-                    SinkConstants.SINK_ARG_ASSET_SPECIFIC_OUTPUT_DESCRIPTION, true);
-        }
         return _paramDefns;
     }
 

@@ -1,7 +1,7 @@
 package daris.plugin.sink.util;
 
 import arc.xml.XmlDoc;
-import io.github.xtman.ssh.util.PathUtils;
+import io.github.xtman.util.PathUtils;
 
 public class OutputPath {
 

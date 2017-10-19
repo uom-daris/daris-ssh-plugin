@@ -19,7 +19,7 @@ import ch.ethz.ssh2.SFTPv3Client;
 import ch.ethz.ssh2.ServerHostKeyVerifier;
 import ch.ethz.ssh2.Session;
 import ch.ethz.ssh2.channel.Channel;
-import io.github.xtman.ssh.util.AbortCheck;
+import io.github.xtman.util.AbortCheck;
 
 public class SshConnection implements Closeable {
 

@@ -1,22 +1,28 @@
 package daris.ssh.plugin.sink;
 
+import java.io.BufferedInputStream;
 import java.io.Closeable;
+import java.io.File;
+import java.io.FileInputStream;
 import java.io.InputStream;
 import java.util.Map;
 import java.util.regex.Pattern;
 
 import arc.archive.ArchiveInput;
 import arc.archive.ArchiveRegistry;
+import arc.mf.plugin.PluginTask;
 import arc.mf.plugin.dtype.BooleanType;
 import arc.mf.plugin.dtype.IntegerType;
 import arc.mf.plugin.dtype.PasswordType;
 import arc.mf.plugin.dtype.StringType;
+import arc.mf.plugin.sink.ParameterDefinition;
 import arc.mime.NamedMimeType;
 import arc.streams.LongInputStream;
+import arc.streams.StreamCopy;
 import arc.xml.XmlDoc.Element;
 import daris.plugin.sink.AbstractDataSink;
 import daris.plugin.sink.util.OutputPath;
-import io.github.xtman.ssh.util.PathUtils;
+import io.github.xtman.util.PathUtils;
 
 public abstract class SSHSink extends AbstractDataSink {
 
@@ -73,24 +79,49 @@ public abstract class SSHSink extends AbstractDataSink {
     protected SSHSink(String typeName) throws Throwable {
         super(typeName);
 
+    }
+
+    @Override
+    protected void addParameterDefinitions(Map<String, ParameterDefinition> paramDefns) throws Throwable {
         /*
          * init param definitions
          */
-        addParameterDefinition(PARAM_HOST, StringType.DEFAULT, "SSH server host.");
-        addParameterDefinition(PARAM_PORT, new IntegerType(1, 65535), "SSH server port.");
-        addParameterDefinition(PARAM_HOST_KEY, StringType.DEFAULT,
-                "SSH server host public key. If specified, host key will be validated.");
-        addParameterDefinition(PARAM_USERNAME, StringType.DEFAULT, "SSH username.");
-        addParameterDefinition(PARAM_PASSWORD, PasswordType.DEFAULT, "User's password.");
-        addParameterDefinition(PARAM_PRIVATE_KEY, PasswordType.DEFAULT, "User's private key.");
-        addParameterDefinition(PARAM_PASSPHRASE, PasswordType.DEFAULT, "Passphrase for user's private key.");
-        addParameterDefinition(PARAM_DIRECTORY, StringType.DEFAULT,
-                "The default/base directory on the remote SSH server. If not specified, defaults to user's home directory.");
-        addParameterDefinition(PARAM_UNARCHIVE, BooleanType.DEFAULT, "Extract archive contents. Defaults to false.");
-        addParameterDefinition(PARAM_DIR_MODE, new StringType(Pattern.compile("^[0-7]{4}$")),
-                "Remote directory mode (permissions). Defaults to " + String.format("%04o", DEFAULT_DIR_MODE));
-        addParameterDefinition(PARAM_FILE_MODE, new StringType(Pattern.compile("^[0-7]{4}$")),
-                "Remote file mode (permissions). Defaults to " + String.format("%04o", DEFAULT_FILE_MODE));
+
+        //@formatter:off
+        
+        // Supplementary type definition in the description of the parameter definition:
+        // Symbols:
+        //     {{    --- start
+        //     }}    --- end
+        //     ,     --- attribute delimiter
+
+        // Attributes:
+        //     text              --- override to text type (multiple lines of string)
+        //     pattern=PATTERN   --- regex pattern to validtate the string value.
+        //     default=DEFAULT   --- default value.
+        //     mutable           --- Indicates this parameter is mutable even if it has been specified in the sink.
+        //     admin             --- Indicates this parameter can only be specified by the admin when creating the sink. It is invisible for end users.
+        
+        //@formatter:on
+        addParameterDefinition(paramDefns, PARAM_HOST, StringType.DEFAULT, "SSH server host.");
+        addParameterDefinition(paramDefns, PARAM_PORT, new IntegerType(1, 65535), "SSH server port.{{default=22}}");
+        addParameterDefinition(paramDefns, PARAM_HOST_KEY, StringType.DEFAULT,
+                "SSH server host public key. If specified, host key will be validated.{{text,admin}}");
+        addParameterDefinition(paramDefns, PARAM_USERNAME, StringType.DEFAULT, "SSH username.");
+        addParameterDefinition(paramDefns, PARAM_PASSWORD, PasswordType.DEFAULT, "User's password.");
+        addParameterDefinition(paramDefns, PARAM_PRIVATE_KEY, PasswordType.DEFAULT, "User's private key.{{text}}");
+        addParameterDefinition(paramDefns, PARAM_PASSPHRASE, PasswordType.DEFAULT,
+                "Passphrase for user's private key.");
+        addParameterDefinition(paramDefns, PARAM_DIRECTORY, StringType.DEFAULT,
+                "The default/base directory on the remote SSH server. If not specified, defaults to user's home directory.{{mutable}}");
+        addParameterDefinition(paramDefns, PARAM_UNARCHIVE, BooleanType.DEFAULT,
+                "Extract archive contents. Defaults to false.{{mutable,default=false}}");
+        addParameterDefinition(paramDefns, PARAM_DIR_MODE, new StringType(Pattern.compile("^[0-7]{4}$")),
+                "Remote directory mode (permissions). Defaults to " + String.format("%04o", DEFAULT_DIR_MODE)
+                        + ".{{mutable,pattern=^[0-7]{4}$,default=" + String.format("%04o", DEFAULT_DIR_MODE) + "}}");
+        addParameterDefinition(paramDefns, PARAM_FILE_MODE, new StringType(Pattern.compile("^[0-7]{4}$")),
+                "Remote file mode (permissions). Defaults to " + String.format("%04o", DEFAULT_FILE_MODE)
+                        + ".{{mutable,pattern=^[0-7]{4}$,default=" + String.format("%04o", DEFAULT_FILE_MODE) + "}}");
     }
 
     public String[] acceptedTypes() throws Throwable {
@@ -116,6 +147,7 @@ public abstract class SSHSink extends AbstractDataSink {
             validateParams(params);
         }
         String assetSpecificOutputPath = multiTransferContext != null ? null : getAssetSpecificOutput(params);
+        System.out.println("asset.output: " + assetSpecificOutputPath);
         boolean unarchive = Boolean.parseBoolean(params.getOrDefault(PARAM_UNARCHIVE, "false"));
         String mimeType = streamMimeType;
         if (mimeType == null && assetMeta != null) {
@@ -140,7 +172,24 @@ public abstract class SSHSink extends AbstractDataSink {
                             if (entry.isDirectory()) {
                                 client.mkdirs(PathUtils.join(dirPath, entry.name()));
                             } else {
-                                client.put(entry.stream(), entry.size(), PathUtils.join(dirPath, entry.name()));
+                                long size = entry.size();
+                                if (size < 0) {
+                                    // entry size was not set
+                                    File tf = PluginTask.createTemporaryFile();
+                                    try {
+                                        StreamCopy.copy(entry.stream(), tf);
+                                        InputStream ti = new BufferedInputStream(new FileInputStream(tf));
+                                        try {
+                                            client.put(ti, tf.length(), PathUtils.join(dirPath, entry.name()));
+                                        } finally {
+                                            ti.close();
+                                        }
+                                    } finally {
+                                        PluginTask.deleteTemporaryFile(tf);
+                                    }
+                                } else {
+                                    client.put(entry.stream(), entry.size(), PathUtils.join(dirPath, entry.name()));
+                                }
                             }
                         } finally {
                             ai.closeEntry();
