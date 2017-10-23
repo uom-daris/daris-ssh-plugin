@@ -16,7 +16,7 @@ public class SCPSink extends SSHSink {
 
     @Override
     public String description() throws Throwable {
-        return "DaRIS SCP sink.";
+        return "DaRIS scp sink.";
     }
 
     @Override

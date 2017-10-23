@@ -86,42 +86,47 @@ public abstract class SSHSink extends AbstractDataSink {
         /*
          * init param definitions
          */
-
-        //@formatter:off
+        // @formatter:off
         
-        // Supplementary type definition in the description of the parameter definition:
-        // Symbols:
-        //     {{    --- start
-        //     }}    --- end
-        //     ,     --- attribute delimiter
-
-        // Attributes:
-        //     text              --- override to text type (multiple lines of string)
-        //     pattern=PATTERN   --- regex pattern to validtate the string value.
-        //     default=DEFAULT   --- default value.
-        //     mutable           --- Indicates this parameter is mutable even if it has been specified in the sink.
-        //     admin             --- Indicates this parameter can only be specified by the admin when creating the sink. It is invisible for end users.
+        // {{                 --- start
+        // }}                 --- end
+        // default=DEFAULT    --- default value
+        // admin              --- for admin only, should not be presented to end user
+        // text               --- multiple lines text
+        // optional           --- optional
+        // xor=PARAM1|PARAM2  --- 
+        // mutable            --- 
+        // pattern=PATTERN    --- regex pattern to validate string value
+        // enum=VALUE1|VALUE2 --- enumerated values
         
-        //@formatter:on
-        addParameterDefinition(paramDefns, PARAM_HOST, StringType.DEFAULT, "SSH server host.");
-        addParameterDefinition(paramDefns, PARAM_PORT, new IntegerType(1, 65535), "SSH server port.{{default=22}}");
+        // @formatter:on
+        addParameterDefinition(paramDefns, PARAM_HOST, StringType.DEFAULT, "SSH server host.", false);
+        addParameterDefinition(paramDefns, PARAM_PORT, new IntegerType(1, 65535), "SSH server port.{{default=22}}",
+                false);
         addParameterDefinition(paramDefns, PARAM_HOST_KEY, StringType.DEFAULT,
-                "SSH server host public key. If specified, host key will be validated.{{text,admin}}");
-        addParameterDefinition(paramDefns, PARAM_USERNAME, StringType.DEFAULT, "SSH username.");
-        addParameterDefinition(paramDefns, PARAM_PASSWORD, PasswordType.DEFAULT, "User's password.");
-        addParameterDefinition(paramDefns, PARAM_PRIVATE_KEY, PasswordType.DEFAULT, "User's private key.{{text}}");
+                "SSH server host public key. If specified, host key will be validated.{{admin,text,optional}}", false);
+        addParameterDefinition(paramDefns, PARAM_USERNAME, StringType.DEFAULT, "SSH username.", false);
+        addParameterDefinition(paramDefns, PARAM_PASSWORD, PasswordType.DEFAULT,
+                "User's password.{{optional,xor=" + PARAM_PRIVATE_KEY + "}}", false);
+        addParameterDefinition(paramDefns, PARAM_PRIVATE_KEY, PasswordType.DEFAULT,
+                "User's private key.{{text,optional,xor=" + PARAM_PASSWORD + "}}", false);
         addParameterDefinition(paramDefns, PARAM_PASSPHRASE, PasswordType.DEFAULT,
-                "Passphrase for user's private key.");
+                "Passphrase for user's private key.{{optional}}", false);
         addParameterDefinition(paramDefns, PARAM_DIRECTORY, StringType.DEFAULT,
-                "The default/base directory on the remote SSH server. If not specified, defaults to user's home directory.{{mutable}}");
+                "The default/base directory on the remote SSH server. If not specified, defaults to user's home directory.{{optional,mutable}}",
+                false);
         addParameterDefinition(paramDefns, PARAM_UNARCHIVE, BooleanType.DEFAULT,
-                "Extract archive contents. Defaults to false.{{mutable,default=false}}");
+                "Extract archive contents. Defaults to false.{{optional,mutable,default=false}}", false);
         addParameterDefinition(paramDefns, PARAM_DIR_MODE, new StringType(Pattern.compile("^[0-7]{4}$")),
                 "Remote directory mode (permissions). Defaults to " + String.format("%04o", DEFAULT_DIR_MODE)
-                        + ".{{mutable,pattern=^[0-7]{4}$,default=" + String.format("%04o", DEFAULT_DIR_MODE) + "}}");
+                        + ".{{optional,mutable,pattern=^[0-7]{4}$,default=" + String.format("%04o", DEFAULT_DIR_MODE)
+                        + "}}",
+                false);
         addParameterDefinition(paramDefns, PARAM_FILE_MODE, new StringType(Pattern.compile("^[0-7]{4}$")),
                 "Remote file mode (permissions). Defaults to " + String.format("%04o", DEFAULT_FILE_MODE)
-                        + ".{{mutable,pattern=^[0-7]{4}$,default=" + String.format("%04o", DEFAULT_FILE_MODE) + "}}");
+                        + ".{{optional,mutable,pattern=^[0-7]{4}$,default=" + String.format("%04o", DEFAULT_FILE_MODE)
+                        + "}}",
+                false);
     }
 
     public String[] acceptedTypes() throws Throwable {
@@ -147,7 +152,6 @@ public abstract class SSHSink extends AbstractDataSink {
             validateParams(params);
         }
         String assetSpecificOutputPath = multiTransferContext != null ? null : getAssetSpecificOutput(params);
-        System.out.println("asset.output: " + assetSpecificOutputPath);
         boolean unarchive = Boolean.parseBoolean(params.getOrDefault(PARAM_UNARCHIVE, "false"));
         String mimeType = streamMimeType;
         if (mimeType == null && assetMeta != null) {

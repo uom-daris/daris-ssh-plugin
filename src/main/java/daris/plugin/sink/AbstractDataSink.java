@@ -19,7 +19,7 @@ public abstract class AbstractDataSink implements DataSinkImpl {
         } else {
             _typeName = SinkConstants.SINK_TYPE_NAME_PREFIX + typeName;
         }
-        _paramDefns = new LinkedHashMap<String, ParameterDefinition>();
+        _paramDefns = new LinkedHashMap<String, arc.mf.plugin.sink.ParameterDefinition>();
         addParameterDefinitions(_paramDefns);
         _paramDefns.put(SinkConstants.SINK_ARG_ASSET_SPECIFIC_OUTPUT,
                 new ParameterDefinition(StringType.DEFAULT, SinkConstants.SINK_ARG_ASSET_SPECIFIC_OUTPUT_DESCRIPTION));
@@ -28,10 +28,9 @@ public abstract class AbstractDataSink implements DataSinkImpl {
     protected abstract void addParameterDefinitions(Map<String, ParameterDefinition> paramDefns) throws Throwable;
 
     protected void addParameterDefinition(Map<String, ParameterDefinition> paramDefns, String name, DataType type,
-            String description, boolean assetSpecific) throws Throwable {
+            String description, Boolean assetSpecific) throws Throwable {
         String pn = name.toLowerCase();
-
-        if (assetSpecific) {
+        if (assetSpecific != null && assetSpecific) {
             if (!pn.startsWith(SinkConstants.SINK_ARG_ASSET_SPECIFIC_PREFIX)) {
                 pn = SinkConstants.SINK_ARG_ASSET_SPECIFIC_PREFIX + pn;
             }
@@ -40,11 +39,6 @@ public abstract class AbstractDataSink implements DataSinkImpl {
             throw new IllegalArgumentException("Argument: " + pn + " for sink type: " + type() + " already exists.");
         }
         paramDefns.put(name, new ParameterDefinition(type, description));
-    }
-
-    protected void addParameterDefinition(Map<String, ParameterDefinition> paramDefns, String name, DataType type,
-            String description) throws Throwable {
-        addParameterDefinition(paramDefns, name, type, description, false);
     }
 
     @Override

@@ -17,9 +17,7 @@ public class PathUtils {
         if (path != null) {
             String p = normalise(path, separator);
             int idx = p.lastIndexOf(separator);
-            if (idx <= 0) {
-                return p;
-            } else {
+            if (idx > 0) {
                 return p.substring(0, idx);
             }
         }
@@ -291,7 +289,7 @@ public class PathUtils {
         return sb.toString();
     }
 
-    public static void main(String[] args) throws Throwable {
-    }
+//    public static void main(String[] args) throws Throwable {
+//    }
 
 }
