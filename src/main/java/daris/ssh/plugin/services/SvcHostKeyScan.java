@@ -1,13 +1,13 @@
 package daris.ssh.plugin.services;
 
-import java.util.Base64;
-
 import arc.mf.plugin.PluginService;
 import arc.mf.plugin.dtype.IntegerType;
 import arc.mf.plugin.dtype.StringType;
 import arc.xml.XmlDoc.Element;
 import arc.xml.XmlWriter;
-import io.github.xtman.ssh.client.SshKeyTools;
+import io.github.xtman.ssh.client.KeyTools;
+import io.github.xtman.ssh.client.KeyType;
+import io.github.xtman.ssh.client.jsch.JschKeyTools;
 
 public class SvcHostKeyScan extends PluginService {
 
@@ -43,9 +43,10 @@ public class SvcHostKeyScan extends PluginService {
     public void execute(Element args, Inputs arg1, Outputs arg2, XmlWriter w) throws Throwable {
         String host = args.value("host");
         int port = args.intValue("port", 22);
-        byte[] pubkey = SshKeyTools.getServerHostKeyBytes(host, port, "ssh-rsa");
-        String type = SshKeyTools.getPublicKeyType(pubkey);
-        w.add("public-key", new String[] { "type", type }, Base64.getEncoder().encodeToString(pubkey));
+        KeyTools keyTools = new JschKeyTools();
+        String publicKey = keyTools.getServerHostKey(host, port, KeyType.RSA);
+        KeyType keyType = KeyTools.getPublicKeyType(publicKey);
+        w.add("public-key", new String[] { "type", keyType.toString() }, publicKey);
     }
 
     @Override

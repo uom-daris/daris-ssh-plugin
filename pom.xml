@@ -4,7 +4,7 @@
 
 	<groupId>au.edu.unimelb.daris</groupId>
 	<artifactId>daris-ssh-plugin</artifactId>
-	<version>0.0.7</version>
+	<version>0.0.8</version>
 	<packaging>jar</packaging>
 
 	<name>daris-ssh-plugin</name>
@@ -20,7 +20,7 @@
 		<maven.compiler.target>1.7</maven.compiler.target>
 		<maven.build.timestamp.format>dd-MMM-yyyy HH:mm:ss z</maven.build.timestamp.format>
 		<maven.test.skip>true</maven.test.skip>
-		<require.mflux.version>4.4.011</require.mflux.version>
+		<require.mflux.version>4.6.023</require.mflux.version>
 	</properties>
 	<!-- DaRIS maven repository on github.com -->
 	<repositories>
@@ -39,10 +39,17 @@
 			<!-- provided so that we do not deploy -->
 			<scope>provided</scope>
 		</dependency>
+	    <!--
 		<dependency>
 			<groupId>ch.ethz.ganymed</groupId>
 			<artifactId>ganymed-ssh2</artifactId>
 			<version>262</version>
+		</dependency>
+		-->
+		<dependency>
+			<groupId>com.jcraft</groupId>
+			<artifactId>jsch</artifactId>
+			<version>0.1.54</version>
 		</dependency>
 		<dependency>
 			<groupId>junit</groupId>

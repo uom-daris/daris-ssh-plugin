@@ -1,7 +1,6 @@
 package daris.ssh.plugin.sink;
 
 import java.io.BufferedInputStream;
-import java.io.Closeable;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.InputStream;
@@ -22,43 +21,11 @@ import arc.streams.StreamCopy;
 import arc.xml.XmlDoc.Element;
 import daris.plugin.sink.AbstractDataSink;
 import daris.plugin.sink.util.OutputPath;
+import io.github.xtman.ssh.client.ConnectionBuilder;
+import io.github.xtman.ssh.client.TransferClient;
 import io.github.xtman.util.PathUtils;
 
-public abstract class SSHSink extends AbstractDataSink {
-
-    static interface Client extends Closeable {
-
-        /**
-         * The remote base directory.
-         * 
-         * @return
-         */
-        String baseDirectory();
-
-        /**
-         * Put the input (file) stream to the remote destination.
-         * 
-         * @param in
-         *            The input stream.
-         * @param length
-         *            Length of the input.
-         * @param dstPath
-         *            The destination path relative to the base directory.
-         * @throws Throwable
-         */
-        void put(InputStream in, long length, String dstPath) throws Throwable;
-
-        /**
-         * Make directories recursively.
-         * 
-         * @param dstDirPath
-         *            The destination directory path relative to the base
-         *            directory.
-         * @throws Throwable
-         */
-        void mkdirs(String dstDirPath) throws Throwable;
-
-    }
+public abstract class SshSink extends AbstractDataSink {
 
     public static final int DEFAULT_FILE_MODE = 0640;
 
@@ -76,7 +43,7 @@ public abstract class SSHSink extends AbstractDataSink {
     public static final String PARAM_DIR_MODE = "dir-mode";
     public static final String PARAM_FILE_MODE = "file-mode";
 
-    protected SSHSink(String typeName) throws Throwable {
+    protected SshSink(String typeName) throws Throwable {
         super(typeName);
 
     }
@@ -163,7 +130,7 @@ public abstract class SSHSink extends AbstractDataSink {
         /*
          * 
          */
-        Client client = null;
+        TransferClient client = null;
         try {
             client = getOrCreateClient(multiTransferContext, params);
             if (unarchive) {
@@ -208,7 +175,11 @@ public abstract class SSHSink extends AbstractDataSink {
             }
         } finally {
             if (multiTransferContext == null && client != null) {
-                client.close();
+                try {
+                    client.close();
+                } finally {
+                    client.connection().close();
+                }
             }
         }
     }
@@ -218,8 +189,12 @@ public abstract class SSHSink extends AbstractDataSink {
 
     public void endMultiple(Object multiTransferContext) throws Throwable {
         if (multiTransferContext != null) {
-            Client client = (Client) multiTransferContext;
-            client.close();
+            TransferClient client = (TransferClient) multiTransferContext;
+            try {
+                client.close();
+            } finally {
+                client.connection().close();
+            }
         }
     }
 
@@ -239,28 +214,27 @@ public abstract class SSHSink extends AbstractDataSink {
         }
     }
 
-    private Client createClient(Map<String, String> params) throws Throwable {
-        String host = params.get(PARAM_HOST);
-        int port = Integer.parseInt(params.getOrDefault(PARAM_PORT, "22"));
-        String hostKey = params.get(PARAM_HOST_KEY);
-        String username = params.get(PARAM_USERNAME);
-        String password = params.get(PARAM_PASSWORD);
-        String privateKey = params.get(PARAM_PRIVATE_KEY);
-        String passphrase = params.get(PARAM_PASSPHRASE);
+    private TransferClient createClient(Map<String, String> params) throws Throwable {
         String directory = params.get(PARAM_DIRECTORY);
         int dirMode = Integer.parseInt(params.getOrDefault(PARAM_DIR_MODE, String.format("%04o", DEFAULT_DIR_MODE)), 8);
         int fileMode = Integer.parseInt(params.getOrDefault(PARAM_FILE_MODE, String.format("%04o", DEFAULT_FILE_MODE)),
                 8);
-        return createClient(host, port, hostKey, username, password, privateKey, passphrase, directory, dirMode,
-                fileMode);
+        ConnectionBuilder cb = new ConnectionBuilder();
+        cb.setHost(params.get(PARAM_HOST));
+        cb.setPort(Integer.parseInt(params.getOrDefault(PARAM_PORT, "22")));
+        cb.setHostKey(params.get(PARAM_HOST_KEY));
+        cb.setUsername(params.get(PARAM_USERNAME));
+        cb.setPassword(params.get(PARAM_PASSWORD));
+        cb.setPrivateKey(params.get(PARAM_PRIVATE_KEY), params.get(PARAM_PASSPHRASE));
+        return createClient(cb, directory, dirMode, fileMode);
     }
 
-    protected abstract Client createClient(String host, int port, String hostKey, String username, String password,
-            String privateKey, String passphrase, String directory, int dirMode, int fileMode) throws Throwable;
+    protected abstract TransferClient createClient(ConnectionBuilder cb, String directory, int dirMode, int fileMode)
+            throws Throwable;
 
-    private Client getOrCreateClient(Object multiTransferContext, Map<String, String> params) throws Throwable {
+    private TransferClient getOrCreateClient(Object multiTransferContext, Map<String, String> params) throws Throwable {
         if (multiTransferContext != null) {
-            return (Client) multiTransferContext;
+            return (TransferClient) multiTransferContext;
         } else {
             return createClient(params);
         }

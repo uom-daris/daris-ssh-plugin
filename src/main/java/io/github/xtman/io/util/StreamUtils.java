@@ -28,16 +28,10 @@ public class StreamUtils {
                 total += len;
             }
         } finally {
-            Throwable t = null;
             if (closeOutput) {
-                try {
-                    out.close();
-                } catch (Throwable ex) {
-                    t = ex;
-                }
-            }
-            if (t != null) {
-                throw t;
+                out.close();
+            } else {
+                out.flush();
             }
         }
     }
@@ -51,23 +45,16 @@ public class StreamUtils {
                 out.write(buffer, 0, len);
             }
         } finally {
-            Throwable t = null;
-            if (closeInput) {
-                try {
-                    in.close();
-                } catch (Throwable ex) {
-                    t = ex;
-                }
-            }
-            if (closeOutput) {
-                try {
+            try {
+                if (closeOutput) {
                     out.close();
-                } catch (Throwable ex) {
-                    t = ex;
+                } else {
+                    out.flush();
                 }
-            }
-            if (t != null) {
-                throw t;
+            } finally {
+                if (closeInput) {
+                    in.close();
+                }
             }
         }
     }
@@ -96,6 +83,8 @@ public class StreamUtils {
         } finally {
             if (closeOutput) {
                 out.close();
+            } else {
+                out.flush();
             }
         }
     }
@@ -121,16 +110,36 @@ public class StreamUtils {
         }
     }
 
-    public static String readString(InputStream in, String charsetName) throws Throwable {
+    public static String readLine(InputStream in, String charsetName) throws Throwable {
+        BufferedReader reader = new BufferedReader(
+                new InputStreamReader(new NonCloseInputStream(in), charsetName == null ? "UTF-8" : charsetName));
+        try {
+            return reader.readLine();
+        } finally {
+            reader.close();
+        }
+    }
+
+    public static String readLine(InputStream in) throws Throwable {
+        return readLine(in, "UTF-8");
+    }
+
+    public static String readString(InputStream in, String charsetName, boolean closeInput) throws Throwable {
 
         // @formatter:off
-//        ByteArrayOutputStream result = new ByteArrayOutputStream();
-//        byte[] buffer = new byte[1024];
-//        int length;
-//        while ((length = in.read(buffer)) != -1) {
-//            result.write(buffer, 0, length);
+//        try {
+//            ByteArrayOutputStream result = new ByteArrayOutputStream();
+//            byte[] buffer = new byte[1024];
+//            int length;
+//            while ((length = in.read(buffer)) != -1) {
+//                result.write(buffer, 0, length);
+//            }
+//            return result.toString(charsetName);
+//        } finally {
+//            if(closeInput) {
+//                in.close();
+//            }
 //        }
-//        return result.toString(charsetName);
         // @formatter:on
 
         BufferedReader reader = new BufferedReader(
@@ -142,13 +151,18 @@ public class StreamUtils {
                 sb.append(line);
             }
         } finally {
-            reader.close();
+            if (closeInput) {
+                try {
+                    reader.close();
+                } finally {
+                    in.close();
+                }
+            }
         }
         return sb.toString();
     }
 
-    public static String readString(InputStream in) throws Throwable {
-        return readString(in, "UTF-8");
+    public static String readString(InputStream in, boolean closeInput) throws Throwable {
+        return readString(in, "UTF-8", closeInput);
     }
-
 }

@@ -9,19 +9,27 @@ import arc.mf.plugin.DataSinkRegistry;
 import arc.mf.plugin.PluginModule;
 import arc.mf.plugin.PluginService;
 import daris.ssh.plugin.services.SvcHostKeyScan;
-import daris.ssh.plugin.sink.SCPSink;
-import daris.ssh.plugin.sink.SFTPSink;
+import daris.ssh.plugin.services.SvcScpGet;
+import daris.ssh.plugin.services.SvcScpPut;
+import daris.ssh.plugin.services.SvcSftpGet;
+import daris.ssh.plugin.services.SvcSftpPut;
+import daris.ssh.plugin.sink.ScpSink;
+import daris.ssh.plugin.sink.SftpSink;
 
 public class DaRISSSHPluginModule implements PluginModule {
 
     private List<PluginService> _services;
 
-    private SCPSink _scpSink;
-    private SFTPSink _sftpSink;
+    private ScpSink _scpSink;
+    private SftpSink _sftpSink;
 
     public DaRISSSHPluginModule() {
         _services = new ArrayList<PluginService>();
         _services.add(new SvcHostKeyScan());
+        _services.add(new SvcSftpGet());
+        _services.add(new SvcSftpPut());
+        _services.add(new SvcScpGet());
+        _services.add(new SvcScpPut());
     }
 
     public String description() {
@@ -31,11 +39,11 @@ public class DaRISSSHPluginModule implements PluginModule {
     public void initialize(ConfigurationResolver conf) throws Throwable {
         try {
             if (_scpSink == null) {
-                _scpSink = new SCPSink();
+                _scpSink = new ScpSink();
                 DataSinkRegistry.add(this, _scpSink);
             }
             if (_sftpSink == null) {
-                _sftpSink = new SFTPSink();
+                _sftpSink = new SftpSink();
                 DataSinkRegistry.add(this, _sftpSink);
             }
         } catch (Throwable e) {

@@ -17,7 +17,11 @@ public class PathUtils {
         if (path != null) {
             String p = normalise(path, separator);
             int idx = p.lastIndexOf(separator);
-            if (idx > 0) {
+            if (idx < 0) {
+                return null;
+            } else if (idx == 0) {
+                return p.substring(0, 1);
+            } else {
                 return p.substring(0, idx);
             }
         }
@@ -102,10 +106,10 @@ public class PathUtils {
         }
         String base = normalise(baseDirPath, separator);
         base = trimTrailingSeparator(base, separator);
-        if (p.equals(base) || base.length() >= p.length()) {
-            return p;
-        }
         if (p.startsWith(base)) {
+            if (p.equals(base)) {
+                return null;
+            }
             String relativePath = p.substring(base.length());
             relativePath = trimLeadingSeparator(relativePath, separator);
             return relativePath;
@@ -119,10 +123,11 @@ public class PathUtils {
         }
         StringBuilder sb = new StringBuilder();
         for (int i = 0; i < paths.length; i++) {
-            if (i == 0) {
-                sb.append(trimTrailingSeparator(paths[i], separator));
-            } else {
-                sb.append(separator).append(trimSeparator(paths[i], separator));
+            if (paths[i] != null) {
+                if (sb.length() > 0 || paths[i].startsWith(String.valueOf(separator))) {
+                    sb.append(separator);
+                }
+                sb.append(trimSeparator(paths[i], separator));
             }
         }
         return sb.toString();
@@ -289,7 +294,7 @@ public class PathUtils {
         return sb.toString();
     }
 
-//    public static void main(String[] args) throws Throwable {
-//    }
+    public static void main(String[] args) throws Throwable {
+    }
 
 }

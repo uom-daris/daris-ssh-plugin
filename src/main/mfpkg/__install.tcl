@@ -20,8 +20,7 @@ if { [xvalue exists [plugin.module.exists :path ${plugin_namespace}/${plugin_jar
 }
 
 # install the plugin module
-plugin.module.add :path ${plugin_namespace}/${plugin_jar} :class ${module_class} \
-    :lib ${plugin_namespace}/lib/ganymed-ssh2-262.jar
+plugin.module.add :path ${plugin_namespace}/${plugin_jar} :class ${module_class}
 
 # reload the services     
 system.service.reload
