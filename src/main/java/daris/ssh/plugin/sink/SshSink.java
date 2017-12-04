@@ -1,6 +1,7 @@
 package daris.ssh.plugin.sink;
 
 import java.io.BufferedInputStream;
+import java.io.ByteArrayInputStream;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.InputStream;
@@ -10,7 +11,9 @@ import java.util.regex.Pattern;
 import arc.archive.ArchiveInput;
 import arc.archive.ArchiveRegistry;
 import arc.mf.plugin.PluginTask;
+import arc.mf.plugin.PluginThread;
 import arc.mf.plugin.dtype.BooleanType;
+import arc.mf.plugin.dtype.EnumType;
 import arc.mf.plugin.dtype.IntegerType;
 import arc.mf.plugin.dtype.PasswordType;
 import arc.mf.plugin.dtype.StringType;
@@ -42,6 +45,8 @@ public abstract class SshSink extends AbstractDataSink {
     public static final String PARAM_UNARCHIVE = "unarchive";
     public static final String PARAM_DIR_MODE = "dir-mode";
     public static final String PARAM_FILE_MODE = "file-mode";
+    public static final String PARAM_PARTS = "parts";
+    public static final String PARAM_LAYOUT_PATTERN = "layout-pattern";
 
     protected SshSink(String typeName) throws Throwable {
         super(typeName);
@@ -94,6 +99,13 @@ public abstract class SshSink extends AbstractDataSink {
                         + ".{{optional,mutable,pattern=^[0-7]{4}$,default=" + String.format("%04o", DEFAULT_FILE_MODE)
                         + "}}",
                 false);
+        addParameterDefinition(paramDefns, PARAM_PARTS, new EnumType(new String[] { "content", "metadata", "both" }),
+                "Specifies which parts of the assets to export. Defaults to 'content'. {{optional,mutable,default=content}}",
+                false);
+        addParameterDefinition(paramDefns, PARAM_LAYOUT_PATTERN, StringType.DEFAULT,
+                "Expression to generate output file path. If not specified, defaults to the asset's namespace path. {{optional,mutable}}",
+                false);
+
     }
 
     public String[] acceptedTypes() throws Throwable {
@@ -120,6 +132,8 @@ public abstract class SshSink extends AbstractDataSink {
         }
         String assetSpecificOutputPath = multiTransferContext != null ? null : getAssetSpecificOutput(params);
         boolean unarchive = Boolean.parseBoolean(params.getOrDefault(PARAM_UNARCHIVE, "false"));
+        String layoutPattern = params.getOrDefault(PARAM_LAYOUT_PATTERN, null);
+        String parts = params.getOrDefault(PARAM_PARTS, "content");
         String mimeType = streamMimeType;
         if (mimeType == null && assetMeta != null) {
             mimeType = assetMeta.value("content/type");
@@ -127,51 +141,37 @@ public abstract class SshSink extends AbstractDataSink {
         if (!ArchiveRegistry.isAnArchive(mimeType) && unarchive) {
             unarchive = false;
         }
+        String dstPath = OutputPath.generateOutputPath(PluginThread.serviceExecutor(), assetSpecificOutputPath, path,
+                layoutPattern, assetMeta, unarchive);
         /*
          * 
          */
         TransferClient client = null;
         try {
             client = getOrCreateClient(multiTransferContext, params);
-            if (unarchive) {
-                String dirPath = OutputPath.getOutputPath(null, assetSpecificOutputPath, path, assetMeta, true);
-                ArchiveInput ai = ArchiveRegistry.createInput(in, new NamedMimeType(mimeType));
-                ArchiveInput.Entry entry;
-                try {
-                    while ((entry = ai.next()) != null) {
-                        try {
-                            if (entry.isDirectory()) {
-                                client.mkdirs(PathUtils.join(dirPath, entry.name()));
-                            } else {
-                                long size = entry.size();
-                                if (size < 0) {
-                                    // entry size was not set
-                                    File tf = PluginTask.createTemporaryFile();
-                                    try {
-                                        StreamCopy.copy(entry.stream(), tf);
-                                        InputStream ti = new BufferedInputStream(new FileInputStream(tf));
-                                        try {
-                                            client.put(ti, tf.length(), PathUtils.join(dirPath, entry.name()));
-                                        } finally {
-                                            ti.close();
-                                        }
-                                    } finally {
-                                        PluginTask.deleteTemporaryFile(tf);
-                                    }
-                                } else {
-                                    client.put(entry.stream(), entry.size(), PathUtils.join(dirPath, entry.name()));
-                                }
-                            }
-                        } finally {
-                            ai.closeEntry();
-                        }
+            if ("metadata".equals(parts) || "both".equals(parts)) {
+                if (assetMeta != null) {
+                    byte[] b = assetMeta.toString().getBytes();
+                    ByteArrayInputStream bais = new ByteArrayInputStream(b);
+                    try {
+                        client.put(bais, b.length, dstPath + ".meta.xml");
+                    } finally {
+                        bais.close();
                     }
-                } finally {
-                    ai.close();
                 }
-            } else {
-                String dstPath = OutputPath.getOutputPath(null, assetSpecificOutputPath, path, assetMeta, false);
-                client.put(in, length, dstPath);
+            }
+            if ("content".equals(parts) || "both".equals(parts)) {
+                if (in != null) {
+                    try {
+                        if (unarchive) {
+                            extractAndTransferContent(client, in, mimeType, dstPath);
+                        } else {
+                            client.put(in, length, dstPath);
+                        }
+                    } finally {
+                        in.close();
+                    }
+                }
             }
         } finally {
             if (multiTransferContext == null && client != null) {
@@ -184,8 +184,50 @@ public abstract class SshSink extends AbstractDataSink {
         }
     }
 
-    // protected abstract void put(SSHClient client, InputStream in, long
-    // length, String remoteFilePath) throws Throwable;
+    private static void extractAndTransferContent(TransferClient client, LongInputStream in, String mimeType,
+            String dstPath) throws Throwable {
+
+        ArchiveInput ai = ArchiveRegistry.createInput(in, new NamedMimeType(mimeType));
+        ArchiveInput.Entry entry;
+        try {
+            while ((entry = ai.next()) != null) {
+                try {
+                    if (entry.isDirectory()) {
+                        client.mkdirs(PathUtils.join(dstPath, entry.name()));
+                    } else {
+                        try {
+                            long size = entry.size();
+                            if (size < 0) {
+                                // entry size was not set
+                                File tf = PluginTask.createTemporaryFile();
+                                try {
+                                    StreamCopy.copy(entry.stream(), tf);
+                                    InputStream ti = new BufferedInputStream(new FileInputStream(tf));
+                                    try {
+                                        client.put(ti, tf.length(), PathUtils.join(dstPath, entry.name()));
+                                    } finally {
+                                        ti.close();
+                                    }
+                                } finally {
+                                    PluginTask.deleteTemporaryFile(tf);
+                                }
+                            } else {
+                                client.put(entry.stream(), entry.size(), PathUtils.join(dstPath, entry.name()));
+                            }
+                        } finally {
+                            if (entry.stream() != null) {
+                                entry.stream().close();
+                            }
+                        }
+                    }
+                } finally {
+                    ai.closeEntry();
+                }
+            }
+        } finally {
+            ai.close();
+        }
+    }
 
     public void endMultiple(Object multiTransferContext) throws Throwable {
         if (multiTransferContext != null) {
