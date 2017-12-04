@@ -20,7 +20,8 @@ if { [xvalue exists [plugin.module.exists :path ${plugin_namespace}/${plugin_jar
 }
 
 # install the plugin module
-plugin.module.add :path ${plugin_namespace}/${plugin_jar} :class ${module_class}
+plugin.module.add :path ${plugin_namespace}/${plugin_jar} :class ${module_class} \
+    :lib ${plugin_namespace}/lib/jsch-0.1.54.jar
 
 # reload the services     
 system.service.reload

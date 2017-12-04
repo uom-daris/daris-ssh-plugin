@@ -3,6 +3,7 @@ package daris.ssh.plugin.services;
 import java.util.Collection;
 
 import arc.xml.XmlDoc.Element;
+import arc.mf.plugin.PluginTask;
 import arc.xml.XmlWriter;
 import io.github.xtman.ssh.client.Connection;
 import io.github.xtman.ssh.client.ScpClient;
@@ -30,7 +31,13 @@ public class SvcScpGet extends AbstractSshGetService {
     @Override
     protected void execute(Connection cxn, Collection<String> paths, String namespace, GetHandler gh, Element args,
             Inputs inputs, Outputs outputs, XmlWriter w) throws Throwable {
+
+        PluginTask.checkIfThreadTaskAborted();
+
         for (String path : paths) {
+
+            PluginTask.checkIfThreadTaskAborted();
+
             String parent = PathUtils.getParent(path);
             String name = PathUtils.getLastComponent(path);
             ScpClient scp = cxn.createScpClient(parent);

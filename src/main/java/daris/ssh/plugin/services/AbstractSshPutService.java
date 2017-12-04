@@ -95,6 +95,9 @@ public abstract class AbstractSshPutService extends AbstractSshService {
         int remaining = Integer.MAX_VALUE;
         XmlDoc.Element re = null;
         while (remaining > 0) {
+
+            PluginTask.checkIfThreadTaskAborted();
+
             XmlDocMaker dm = new XmlDocMaker("args");
             dm.add("where", where);
             dm.add("count", true);
@@ -120,6 +123,9 @@ public abstract class AbstractSshPutService extends AbstractSshService {
             List<XmlDoc.Element> pes = re.elements("path");
             if (pes != null) {
                 for (XmlDoc.Element pe : pes) {
+
+                    PluginTask.checkIfThreadTaskAborted();
+
                     String id = pe.value("@id");
                     String path = pe.value();
                     if (namespace != null) {
@@ -132,7 +138,9 @@ public abstract class AbstractSshPutService extends AbstractSshService {
                     Output output = entry.getValue();
                     client.put(output.stream(), output.length() < 0 ? ae.longValue("content/size") : output.length(),
                             path);
-                    PluginTask.threadTaskCompleted();
+                    
+                    PluginTask.checkIfThreadTaskAborted();
+                    PluginTask.threadTaskCompleted(1);
                 }
             }
             idx += PAGE_SIZE;
