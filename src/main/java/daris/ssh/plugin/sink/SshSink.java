@@ -100,7 +100,7 @@ public abstract class SshSink extends AbstractDataSink {
                         + "}}",
                 false);
         addParameterDefinition(paramDefns, PARAM_PARTS, new EnumType(new String[] { "content", "metadata", "both" }),
-                "Specifies which parts of the assets to export. Defaults to 'content'. {{optional,mutable,default=content}}",
+                "Specifies which parts of the assets to export. Defaults to content. {{optional,mutable,enum=content|metadata|both,default=content}}",
                 false);
         addParameterDefinition(paramDefns, PARAM_LAYOUT_PATTERN, StringType.DEFAULT,
                 "Expression to generate output file path. If not specified, defaults to the asset's namespace path. {{optional,mutable}}",
