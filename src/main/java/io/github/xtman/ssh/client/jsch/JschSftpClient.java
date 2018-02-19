@@ -22,7 +22,7 @@ public class JschSftpClient extends JschTransferClient<ChannelSftp> implements S
         super(connection, channel, remoteBaseDir, encoding, dirMode, fileMode, compress, preserve, verbose);
         this.channel.connect();
         this.channel.setFilenameEncoding(encoding);
-        this.channel.cd(remoteBaseDir);
+        this.channel.cd(remoteBaseDirectory());
     }
 
     @Override

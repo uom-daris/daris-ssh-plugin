@@ -48,13 +48,14 @@ public abstract class JschTransferClient<T extends com.jcraft.jsch.Channel> impl
         this.channel = channel;
 
         _remoteBaseDir = (remoteBaseDir == null || remoteBaseDir.trim().isEmpty())
-                ? Connection.DEFAULT_REMOTE_BASE_DIRECTORY : remoteBaseDir.trim();
+                ? Connection.DEFAULT_REMOTE_BASE_DIRECTORY
+                : remoteBaseDir.trim();
 
         _encoding = encoding == null ? Connection.DEFAULT_ENCODING : encoding;
 
-        _dirMode = dirMode;
+        _dirMode = dirMode == null ? TransferClient.DEFAULT_DIRECTORY_MODE : dirMode;
 
-        _fileMode = fileMode;
+        _fileMode = fileMode == null ? TransferClient.DEFAULT_FILE_MODE : fileMode;
 
         this.verbose = verbose;
 

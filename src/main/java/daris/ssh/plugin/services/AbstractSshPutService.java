@@ -1,21 +1,34 @@
 package daris.ssh.plugin.services;
 
+import java.io.BufferedInputStream;
+import java.io.FileInputStream;
+import java.io.InputStream;
+import java.net.URL;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.AbstractMap.SimpleEntry;
 import java.util.Collection;
 import java.util.List;
 
+import arc.archive.ArchiveInput;
+import arc.archive.ArchiveRegistry;
+import arc.mf.plugin.PluginService;
 import arc.mf.plugin.PluginTask;
 import arc.mf.plugin.ServiceExecutor;
 import arc.mf.plugin.dtype.AssetType;
 import arc.mf.plugin.dtype.BooleanType;
 import arc.mf.plugin.dtype.CiteableIdType;
 import arc.mf.plugin.dtype.StringType;
+import arc.mf.plugin.dtype.UrlType;
+import arc.streams.SizedInputStream;
 import arc.xml.XmlDoc;
 import arc.xml.XmlDoc.Element;
 import arc.xml.XmlDocMaker;
 import arc.xml.XmlWriter;
 import io.github.xtman.ssh.client.Connection;
 import io.github.xtman.ssh.client.TransferClient;
+import io.github.xtman.util.FileNameUtils;
 import io.github.xtman.util.PathUtils;
 
 public abstract class AbstractSshPutService extends AbstractSshService {
@@ -26,14 +39,26 @@ public abstract class AbstractSshPutService extends AbstractSshService {
         this.defn.add(new Interface.Element("namespace", StringType.DEFAULT, "Source asset namespace.", 0,
                 Integer.MAX_VALUE));
         this.defn.add(new Interface.Element("where", StringType.DEFAULT, "Query to select the source assets.", 0, 1));
-        this.defn.add(new Interface.Element("id", AssetType.DEFAULT, "Source asset id.", 1, Integer.MAX_VALUE));
-        Interface.Element cid = new Interface.Element("cid", CiteableIdType.DEFAULT, "Citeable id of source asset.", 1,
+        this.defn.add(new Interface.Element("id", AssetType.DEFAULT, "Source asset id.", 0, Integer.MAX_VALUE));
+        Interface.Element cid = new Interface.Element("cid", CiteableIdType.DEFAULT, "Citeable id of source asset.", 0,
                 Integer.MAX_VALUE);
         cid.add(new Interface.Attribute("recursive", BooleanType.DEFAULT, "Includes descendants. Defaults to false.",
                 0));
         this.defn.add(cid);
-        this.defn.add(new Interface.Element("directory", StringType.DEFAULT, "Remote destination directory.", 1, 1));
-        this.defn.add(new Interface.Element("expr", StringType.DEFAULT, "Expression to generate output path.", 1, 1));
+        this.defn.add(new Interface.Element("directory", StringType.DEFAULT, "Remote destination directory.", 0, 1));
+        this.defn.add(new Interface.Element("expr", StringType.DEFAULT, "Expression to generate output path.", 0, 1));
+
+        Interface.Element inputFile = new Interface.Element("input-file", StringType.DEFAULT,
+                "File name of the service input. Must be specified if service input is given.", 0, 1);
+        inputFile.add(new Interface.Attribute("unarchive", BooleanType.DEFAULT,
+                "Decompress if the service input is an archive file (e.g. .zip, .aar). Defaults to false", 0));
+        this.defn.add(inputFile);
+
+        Interface.Element url = new Interface.Element("url", UrlType.DEFAULT,
+                "A URL to the source file/directory to be sent by sFTP. It must be accessible by the server.", 0, 1);
+        url.add(new Interface.Attribute("unarchive", BooleanType.DEFAULT,
+                "Decompress if it is an archive file (e.g. .zip, .aar). Defaults to false", 0));
+        this.defn.add(url);
     }
 
     @Override
@@ -45,6 +70,16 @@ public abstract class AbstractSshPutService extends AbstractSshService {
         String directory = args.value("directory");
         String expr = args.value("expr");
         String pathGenerateService = getPathGenerateService(executor());
+        String inputFileName = args.value("input-file");
+        boolean unarchiveInput = args.booleanValue("input-file/@unarchive", false);
+        if (inputs != null && inputs.size() > 0 && inputFileName == null) {
+            throw new IllegalArgumentException("Missing input-file name.");
+        }
+        String url = args.value("url");
+        if (url!=null && !url.toLowerCase().startsWith("file:")) {
+            throw new IllegalArgumentException("Unsuported url: " + url + ". Only file: is supported.");
+        }
+        boolean unarchiveUrl = args.booleanValue("url/@unarchive");
 
         TransferClient client = createTransferClient(cxn, directory);
         try {
@@ -82,8 +117,71 @@ public abstract class AbstractSshPutService extends AbstractSshService {
                 }
                 put(executor(), sb.toString(), null, client, expr, pathGenerateService);
             }
+            if (inputs != null && inputs.size() > 0) {
+                PluginService.Input input = inputs.input(0);
+                try {
+                    put(client, inputFileName, input.stream(), input.length(), unarchiveInput);
+                } finally {
+                    input.stream().close();
+                    input.close();
+                }
+            }
+            if (url != null) {
+                if (url.toLowerCase().startsWith("file:")) {
+                    Path path = Paths.get(url.substring(5));
+                    if (Files.isDirectory(path)) {
+                        client.putDirectory(path, true);
+                    } else {
+                        InputStream fi = new BufferedInputStream(new FileInputStream(path.toFile()));
+                        try {
+                            put(client, path.getFileName().toString(), fi, Files.size(path), unarchiveUrl);
+                        } finally {
+                            fi.close();
+                        }
+                    }
+                } else {
+                    URL u = new URL(url);
+                    InputStream fi = u.openStream();
+                    try {
+                        put(client, FileNameUtils.getFileName(u.getPath()), fi, -1, unarchiveUrl);
+                    } finally {
+                        fi.close();
+                    }
+                }
+            }
         } finally {
             client.close();
+        }
+    }
+
+    private static void put(TransferClient client, String fileName, InputStream in, long length, boolean unarchive)
+            throws Throwable {
+        System.out.println("FNAME: " +fileName);
+        String ext = FileNameUtils.getFileExtension(fileName);
+        if (ArchiveRegistry.isAnArchiveExtension(ext) && unarchive) {
+            ArchiveInput ai = ArchiveRegistry.createInputForExtension(new SizedInputStream(in, length), ext,
+                    ArchiveInput.ACCESS_RANDOM);
+            String filePrefix = FileNameUtils.removeFileExtension(fileName);
+            try {
+                ArchiveInput.Entry e = null;
+                while ((e = ai.next()) != null) {
+                    String name = PathUtils.join(filePrefix, e.name());
+                    try {
+                        if (e.isDirectory()) {
+                            client.mkdirs(name);
+                        } else {
+                            client.put(e.stream(), e.size(), name);
+                        }
+                    } finally {
+                        ai.closeEntry();
+                    }
+                }
+            } finally {
+                ai.close();
+            }
+        } else {
+            System.out.println("LENGTH: " + length);
+            client.put(in, length, fileName);
         }
     }
 
@@ -138,7 +236,7 @@ public abstract class AbstractSshPutService extends AbstractSshService {
                     Output output = entry.getValue();
                     client.put(output.stream(), output.length() < 0 ? ae.longValue("content/size") : output.length(),
                             path);
-                    
+
                     PluginTask.checkIfThreadTaskAborted();
                     PluginTask.threadTaskCompleted(1);
                 }
@@ -179,6 +277,14 @@ public abstract class AbstractSshPutService extends AbstractSshService {
     @Override
     public Access access() {
         return ACCESS_ACCESS;
+    }
+
+    public int maxNumberOfInputs() {
+        return 1;
+    }
+
+    public int minNumberOfInputs() {
+        return 0;
     }
 
 }

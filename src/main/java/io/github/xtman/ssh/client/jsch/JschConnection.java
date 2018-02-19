@@ -16,6 +16,7 @@ import io.github.xtman.ssh.client.ConnectionDetails;
 import io.github.xtman.ssh.client.Executor;
 import io.github.xtman.ssh.client.ScpClient;
 import io.github.xtman.ssh.client.SftpClient;
+import io.github.xtman.ssh.client.TransferClient;
 
 public class JschConnection implements io.github.xtman.ssh.client.Connection {
 
@@ -142,12 +143,14 @@ public class JschConnection implements io.github.xtman.ssh.client.Connection {
 
     @Override
     public ScpClient createScpClient() throws Throwable {
-        return this.createScpClient(DEFAULT_REMOTE_BASE_DIRECTORY, DEFAULT_ENCODING, null, null, false, false);
+        return this.createScpClient(DEFAULT_REMOTE_BASE_DIRECTORY, DEFAULT_ENCODING,
+                TransferClient.DEFAULT_DIRECTORY_MODE, TransferClient.DEFAULT_FILE_MODE, false, false);
     }
 
     @Override
     public ScpClient createScpClient(String remoteBaseDir) throws Throwable {
-        return this.createScpClient(remoteBaseDir, DEFAULT_ENCODING, null, null, false, false);
+        return this.createScpClient(remoteBaseDir, DEFAULT_ENCODING, TransferClient.DEFAULT_DIRECTORY_MODE,
+                TransferClient.DEFAULT_FILE_MODE, false, false);
     }
 
     @Override
@@ -159,14 +162,14 @@ public class JschConnection implements io.github.xtman.ssh.client.Connection {
 
     @Override
     public SftpClient createSftpClient() throws Throwable {
-        return this.createSftpClient(DEFAULT_REMOTE_BASE_DIRECTORY, DEFAULT_ENCODING, ScpClient.DEFAULT_DIRECTORY_MODE,
-                ScpClient.DEFAULT_FILE_MODE, false, false);
+        return this.createSftpClient(DEFAULT_REMOTE_BASE_DIRECTORY, DEFAULT_ENCODING,
+                TransferClient.DEFAULT_DIRECTORY_MODE, TransferClient.DEFAULT_FILE_MODE, false, false);
     }
 
     @Override
     public SftpClient createSftpClient(String remoteBaseDir) throws Throwable {
-        return this.createSftpClient(remoteBaseDir, DEFAULT_ENCODING, ScpClient.DEFAULT_DIRECTORY_MODE,
-                ScpClient.DEFAULT_FILE_MODE, false, false);
+        return this.createSftpClient(remoteBaseDir, DEFAULT_ENCODING, TransferClient.DEFAULT_DIRECTORY_MODE,
+                TransferClient.DEFAULT_FILE_MODE, false, false);
     }
 
     @Override

@@ -7,6 +7,10 @@ import java.nio.file.Path;
 
 public interface TransferClient extends Channel {
 
+    public static final int DEFAULT_DIRECTORY_MODE = 0755;
+
+    public static final int DEFAULT_FILE_MODE = 0644;
+
     public static interface GetHandler {
 
         void getFile(FileAttrs file, InputStream in) throws Throwable;
@@ -26,7 +30,7 @@ public interface TransferClient extends Channel {
     void getDirectory(String remotePath, File dstDir) throws Throwable;
 
     void put(FileAttrs file, InputStream in) throws Throwable;
-    
+
     void put(InputStream in, long length, Integer mode, Integer mtime, Integer atime, String dstPath) throws Throwable;
 
     void put(InputStream in, long length, String dstPath) throws Throwable;
