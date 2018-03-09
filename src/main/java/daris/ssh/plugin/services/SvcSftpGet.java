@@ -2,8 +2,8 @@ package daris.ssh.plugin.services;
 
 import java.util.Collection;
 
-import arc.xml.XmlDoc.Element;
 import arc.mf.plugin.PluginTask;
+import arc.xml.XmlDoc.Element;
 import arc.xml.XmlWriter;
 import io.github.xtman.ssh.client.Connection;
 import io.github.xtman.ssh.client.SftpClient;
@@ -20,7 +20,7 @@ public class SvcSftpGet extends AbstractSshGetService {
 
     @Override
     protected void execute(Connection cxn, Collection<String> paths, String namespace, GetHandler gh, Element args,
-            Inputs inputs, Outputs outputs, XmlWriter w) throws Throwable {
+            Inputs inputs, Outputs outputs, XmlWriter w, OnError onError) throws Throwable {
 
         PluginTask.checkIfThreadTaskAborted();
 
@@ -37,7 +37,7 @@ public class SvcSftpGet extends AbstractSshGetService {
                 } else {
                     sftp.setRemoteBaseDirectory(Connection.DEFAULT_REMOTE_BASE_DIRECTORY);
                 }
-                sftp.get(name, gh);
+                get(sftp, name, gh, onError.retry(), onError.stopOnError(), w);
             }
         } finally {
             sftp.close();

@@ -14,6 +14,50 @@ import io.github.xtman.ssh.client.ConnectionBuilder;
 
 public abstract class AbstractSshService extends PluginService {
 
+    public static class OnError {
+
+        public static enum Action {
+            CONTINUE, STOP
+        }
+
+        private Action _action;
+        private int _retry;
+
+        public OnError(XmlDoc.Element oe) throws Throwable {
+            if (oe == null) {
+                _action = DEFAULT_ACTION_ON_ERROR;
+                _retry = 0;
+            } else {
+                _action = oe.value() == null ? DEFAULT_ACTION_ON_ERROR : Action.valueOf(oe.value().toUpperCase());
+                _retry = oe.intValue("@retry", 0);
+            }
+        }
+
+        public OnError(Action action, int retry) {
+            _action = action;
+            _retry = retry;
+        }
+
+        public Action action() {
+            return _action;
+        }
+
+        public int retry() {
+            return _retry;
+        }
+
+        public boolean stopOnError() {
+            return Action.STOP.equals(_action);
+        }
+
+        public boolean continueOnError() {
+            return Action.CONTINUE.equals(_action);
+        }
+
+    }
+
+    public static final OnError.Action DEFAULT_ACTION_ON_ERROR = OnError.Action.STOP;
+
     public static final String SECURE_WALLET_KEY_XPATH_SEPARATOR = "::";
 
     protected Interface defn;
@@ -43,6 +87,14 @@ public abstract class AbstractSshService extends PluginService {
                 "value or reference to a secure wallet entry. If the latter, key for the entry is specified. Defaults to value.",
                 0));
         this.defn.add(passphrase);
+
+        Interface.Element onError = new Interface.Element("on-error", new EnumType(new String[] { "continue", "stop" }),
+                "The behaviour to exhibit when encountering an error. Defaults to '"
+                        + DEFAULT_ACTION_ON_ERROR.name().toLowerCase() + "'.",
+                0, 1);
+        onError.add(
+                new Interface.Attribute("retry", IntegerType.POSITIVE, "Number of retry attempts. Defaults to 0", 0));
+        this.defn.add(onError);
 
     }
 
@@ -83,15 +135,17 @@ public abstract class AbstractSshService extends PluginService {
             throw new IllegalArgumentException("Either password or private-key must be specified.");
         }
         Connection cxn = cb.build();
+        OnError onError = args.elementExists("on-error") ? new OnError(args.element("on-error"))
+                : new OnError(DEFAULT_ACTION_ON_ERROR, 0);
         try {
-            execute(cxn, args, inputs, outputs, w);
+            execute(cxn, args, inputs, outputs, w, onError);
         } finally {
             cxn.close();
         }
     }
 
-    protected abstract void execute(Connection cxn, XmlDoc.Element args, Inputs inputs, Outputs outputs, XmlWriter w)
-            throws Throwable;
+    protected abstract void execute(Connection cxn, XmlDoc.Element args, Inputs inputs, Outputs outputs, XmlWriter w,
+            OnError onError) throws Throwable;
 
     @Override
     public boolean canBeAborted() {
