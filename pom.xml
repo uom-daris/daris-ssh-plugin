@@ -9,7 +9,7 @@
 
 	<name>daris-ssh-plugin</name>
 	<description>DaRIS SSH(scp, sftp) sinks.</description>
-	<url>http://www.unimelb.edu.au</url>
+	<url>https://github.com/uom-daris/daris-ssh-plugin</url>
 	<organization>
 		<name>The University of Melbourne</name>
 		<url>http://www.unimelb.edu.au</url>
