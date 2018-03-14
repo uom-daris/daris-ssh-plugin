@@ -13,7 +13,6 @@ import arc.archive.ArchiveRegistry;
 import arc.mf.plugin.PluginTask;
 import arc.mf.plugin.PluginThread;
 import arc.mf.plugin.dtype.BooleanType;
-import arc.mf.plugin.dtype.EnumType;
 import arc.mf.plugin.dtype.IntegerType;
 import arc.mf.plugin.dtype.PasswordType;
 import arc.mf.plugin.dtype.StringType;
@@ -99,7 +98,7 @@ public abstract class SshSink extends AbstractDataSink {
                         + ".{{optional,mutable,pattern=^[0-7]{4}$,default=" + String.format("%04o", DEFAULT_FILE_MODE)
                         + "}}",
                 false);
-        addParameterDefinition(paramDefns, PARAM_PARTS, new EnumType(new String[] { "content", "metadata", "both" }),
+        addParameterDefinition(paramDefns, PARAM_PARTS, StringType.DEFAULT,
                 "Specifies which parts of the assets to export. Defaults to content. {{optional,mutable,enum=content|metadata|both,default=content}}",
                 false);
         addParameterDefinition(paramDefns, PARAM_LAYOUT_PATTERN, StringType.DEFAULT,
