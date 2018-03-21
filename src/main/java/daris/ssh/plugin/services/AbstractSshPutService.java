@@ -319,8 +319,13 @@ public abstract class AbstractSshPutService extends AbstractSshService {
             SimpleEntry<XmlDoc.Element, Output> entry = getAsset(executor, assetId, null);
             XmlDoc.Element ae = entry.getKey();
             Output output = entry.getValue();
-            put(client, dstPath, output.stream(), output.length() < 0 ? ae.longValue("content/size") : output.length(),
-                    unarchive);
+            try {
+                put(client, dstPath, output.stream(),
+                        output.length() < 0 ? ae.longValue("content/size") : output.length(), unarchive);
+            } finally {
+                output.stream().close();
+                output.close();
+            }
         } catch (Throwable e) {
             if (e instanceof IOException && retry > 0) {
                 // retry if set

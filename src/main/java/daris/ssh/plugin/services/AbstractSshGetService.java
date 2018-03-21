@@ -128,7 +128,11 @@ public abstract class AbstractSshGetService extends AbstractSshService {
             dm.pop();
         }
         PluginService.Input input = new PluginService.Input(in, file.length(), null, file.path());
-        executor.execute("service.execute", dm.root(), new PluginService.Inputs(input), null);
+        try {
+            executor.execute("service.execute", dm.root(), new PluginService.Inputs(input), null);
+        } finally {
+            input.close();
+        }
     }
 
     static void createAssetNamespace(ServiceExecutor executor, FileAttrs dir, String namespace) throws Throwable {
